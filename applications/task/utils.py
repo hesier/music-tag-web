@@ -6,7 +6,7 @@ import time
 
 from component import music_tag
 
-from applications.task.services.update_ids import save_music
+from applications.task.services.update_ids import save_music, save_lrc_file
 from component.zhconv.zhconv import convert, issimp
 
 
@@ -102,6 +102,53 @@ def match_song(resource, song_path, select_mode):
         song_select["file_full_path"] = song_path
         song_select["lyrics"] = MusicResource(resource).fetch_lyric(song_select["id"])
         save_music(file, song_select, False)
+    return is_match
+
+
+def match_lrc(resource, song_path, select_mode):
+    from applications.task.services.music_resource import MusicResource
+
+    file = music_tag.load_file(song_path)
+    file_name = song_path.split("/")[-1]
+    file_title = file_name.split('.')[0]
+    title = file["title"].value or file_title
+    artist = file["artist"].value or ""
+    album = file["album"].value or ""
+
+    songs = MusicResource(resource).fetch_id3_by_title(title)
+
+    is_match = False
+    song_select = None
+    match_score_map = {
+        "title": 0,
+        "artist": 0,
+        "album": 0,
+    }
+    for song in songs:
+        match_score_map["title"] = match_score(title, song["name"])
+        match_score_map["artist"] = match_artist(artist if artist else title, song["artist"])
+        match_score_map["album"] = match_score(album if album else title, song["album"])
+        if artist and match_score_map["artist"] == 0:
+            match_score_map["artist"] = -2
+        # 标题包含艺术家信息
+        if not artist and match_score_map["artist"] >= 1:
+            if match_score_map["title"] >= 1:
+                match_score_map["title"] = 2
+        if sum(match_score_map.values()) >= 3:
+            is_match = True
+            song_select = song
+            break
+        if select_mode == "simple":
+            if match_score_map["title"] == 2:
+                is_match = True
+                song_select = song
+                break
+    if is_match:
+        print(f"{title}>>>{song_select['name']}::{match_score_map}")
+        song_select["filename"] = file_name
+        song_select["file_full_path"] = song_path
+        song_select["lyrics"] = MusicResource(resource).fetch_lyric(song_select["id"])
+        save_lrc_file(file, song_select)
     return is_match
 
 

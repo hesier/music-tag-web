@@ -19,11 +19,17 @@ export default {
     updateId3: function(params) {
         return POST(reUrl + '/api/update_id3/', params)
     },
+    updateLrc: function(params) {
+        return POST(reUrl + '/api/update_lrc/', params)
+    },
     batchUpdateId3: function(params) {
         return POST(reUrl + '/api/batch_update_id3/', params)
     },
     batchAutoUpdateId3: function(params) {
         return POST(reUrl + '/api/batch_auto_update_id3/', params)
+    },
+    batchAutoUpdateLrc: function(params) {
+        return POST(reUrl + '/api/batch_auto_update_lrc/', params)
     },
     tidyFolder: function(params) {
         return POST(reUrl + '/api/tidy_folder/', params)

@@ -16,7 +16,7 @@ from applications.task.models import TaskRecord, Task
 from applications.task.services.music_ids import MusicIDS
 from applications.task.services.music_resource import MusicResource
 from applications.task.services.scan_utils import ScanMusic, MusicInfo
-from applications.task.utils import folder_update_time, exists_dir, match_song
+from applications.task.utils import folder_update_time, exists_dir, match_song, match_lrc
 from django_vue_cli.celery_app import app
 
 
@@ -273,6 +273,65 @@ def batch_auto_tag_task(batch, source_list, select_mode):
             print("开始匹配", resource)
             try:
                 is_match = match_song(resource, task.full_path, select_mode)
+            except Exception as e:
+                print(e)
+                is_match = False
+                break
+            if is_match:
+                task.state = "success"
+                task.save()
+                parent_path = os.path.dirname(task.full_path)
+                Task.objects.update_or_create(full_path=task.full_path, defaults={
+                    "state": task.state,
+                    "parent_path": parent_path,
+                    "filename": os.path.basename(task.full_path),
+                    "song_name": task.song_name,
+                    "artist_name": task.artist_name,
+                })
+                break
+        if not is_match:
+            task.state = "failed"
+            task.save()
+            parent_path = os.path.dirname(task.full_path)
+            Task.objects.update_or_create(full_path=task.full_path, defaults={
+                "state": task.state,
+                "parent_path": parent_path,
+                "filename": os.path.basename(task.full_path),
+                "song_name": task.song_name,
+                "artist_name": task.artist_name,
+            })
+
+
+def batch_auto_lrc_task(batch, source_list, select_mode):
+    """
+    自动刮削任务
+    source_list: ["migu", "qmusic", "netease"]
+    """
+    folder_list = TaskRecord.objects.filter(batch=batch, icon="icon-folder").all()
+    for folder in folder_list:
+        data = os.scandir(folder.full_path)
+        bulk_set = []
+        for entry in data:
+            each = entry.name
+            file_type = each.split(".")[-1]
+            file_name = ".".join(each.split(".")[:-1])
+            if file_type not in ALLOW_TYPE:
+                continue
+            bulk_set.append(TaskRecord(**{
+                "batch": batch,
+                "song_name": file_name,
+                "full_path": f"{folder.full_path}/{each}",
+                "icon": "icon-music",
+
+            }))
+        TaskRecord.objects.bulk_create(bulk_set)
+    task_list = TaskRecord.objects.filter(batch=batch).exclude(icon="icon-folder").all()
+    for task in task_list:
+        is_match = False
+        for resource in source_list:
+            print("开始匹配", resource)
+            try:
+                is_match = match_lrc(resource, task.full_path, select_mode)
             except Exception as e:
                 print(e)
                 is_match = False

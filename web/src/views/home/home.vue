@@ -55,8 +55,12 @@
                     v-show="musicInfo.title && checkedIds.length === 0">
                     <div style="width: 100%;display: flex;align-items: center;">
                         <bk-button :theme="'success'" :loading="isLoading" @click="handleClick" class="mr10"
-                            style="width: 87%;">
+                            style="width: 43%;">
                             保存信息
+                        </bk-button>
+                        <bk-button :theme="'success'" :loading="isLoading" @click="handleClickLrc" class="mr10"
+                            style="width: 43%;">
+                            保存歌词文件
                         </bk-button>
                         <div style="margin-left: 6px;cursor: pointer;" @click="exampleSetting3.primary.visible = true">
                             <bk-icon type="cog-shape"></bk-icon>
@@ -264,6 +268,11 @@
                             @click="exampleSetting1.primary.visible = true" class="mr10"
                             style="width: 50%;">
                             自动修改
+                        </bk-button>
+                        <bk-button :theme="'success'" :loading="isLoading"
+                            @click="exampleSetting4.primary.visible = true" class="mr10"
+                            style="width: 50%;">
+                            自动下载歌词
                         </bk-button>
                         <bk-button :theme="'success'" :loading="isLoading"
                             @click="exampleSetting2.primary.visible = true" class="mr10"
@@ -532,6 +541,35 @@
                 </bk-option>
             </bk-select>
         </bk-dialog>
+        <bk-dialog v-model="exampleSetting4.primary.visible"
+            theme="primary"
+            :mask-close="false"
+            @confirm="handleBatchAutoLrc"
+            :header-position="exampleSetting4.primary.headerPosition"
+            title="自动批量修改">
+            <p>宽松模式: 只根据标题匹配元数据, 可能存在同名或翻唱歌曲。</p>
+            <p>严格模式: 根据标题和歌手或标题和专辑匹配元数据, 准确性更高。</p>
+            <bk-radio-group v-model="selectAutoMode">
+                <bk-radio-button value="simple">
+                    宽松模式
+                </bk-radio-button>
+                <bk-radio-button value="hard">
+                    严格模式
+                </bk-radio-button>
+            </bk-radio-group>
+            <div>音乐源顺序</div>
+            <bk-select style="width: 250px;"
+                searchable
+                multiple
+                show-select-all
+                v-model="sourceList">
+                <bk-option v-for="option in resourceListBatch"
+                    :key="option.id"
+                    :id="option.id"
+                    :name="option.name">
+                </bk-option>
+            </bk-select>
+        </bk-dialog>
         <bk-dialog v-model="exampleSetting2.primary.visible"
             theme="primary"
             :mask-close="false"
@@ -738,6 +776,12 @@
                     }
                 },
                 exampleSetting3: {
+                    primary: {
+                        visible: false,
+                        headerPosition: 'left'
+                    }
+                },
+                exampleSetting4: {
                     primary: {
                         visible: false,
                         headerPosition: 'left'
@@ -995,6 +1039,24 @@
                     }
                 })
             },
+            // 下载歌词
+            handleClickLrc() {
+                console.log(this.musicInfo)
+                const params = [{
+                    'file_full_path': this.filePath + '/' + this.fileName,
+                    ...this.musicInfo
+                }]
+                this.isLoading = true
+                this.$api.Task.updateLrc({'music_id3_info': params}).then((res) => {
+                    this.isLoading = false
+                    if (res.result) {
+                        this.$cwMessage('修改成功', 'success')
+                        this.$store.commit('setHasMsg', true)
+                    } else {
+                        this.$cwMessage('修改失败', 'error')
+                    }
+                })
+            },
             handleBatch() {
                 this.$bkInfo({
                     title: '确认要批量修改？',
@@ -1032,6 +1094,35 @@
                             this.musicInfoManual['select_mode'] = this.selectAutoMode
                             this.musicInfoManual['source_list'] = this.sourceList
                             this.$api.Task.batchAutoUpdateId3({
+                                'file_full_path': this.filePath,
+                                'select_data': this.checkedData,
+                                'music_info': this.musicInfoManual
+                            }).then((res) => {
+                                this.isLoading = false
+                                console.log(res)
+                                if (res.result) {
+                                    this.$cwMessage('创建成功', 'success')
+                                    this.$store.commit('setHasMsg', true)
+                                }
+                            })
+                            return true
+                        } catch (e) {
+                            console.warn(e)
+                            return false
+                        }
+                    }
+                })
+            },
+            handleBatchAutoLrc() {
+                this.$bkInfo({
+                    title: '确认要批量自动下载歌词？',
+                    confirmLoading: true,
+                    confirmFn: () => {
+                        try {
+                            this.isLoading = true
+                            this.musicInfoManual['select_mode'] = this.selectAutoMode
+                            this.musicInfoManual['source_list'] = this.sourceList
+                            this.$api.Task.batchAutoUpdateLrc({
                                 'file_full_path': this.filePath,
                                 'select_data': this.checkedData,
                                 'music_info': this.musicInfoManual

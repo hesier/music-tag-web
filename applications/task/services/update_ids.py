@@ -23,6 +23,31 @@ def update_music_info(music_id3_info, is_raw_thumbnail=False):
         })
 
 
+def update_music_lrc_file(music_id3_info):
+    for each in music_id3_info:
+        file_path = each["file_full_path"]
+        f = music_tag.load_file(file_path)
+        save_lrc_file(f, each)
+        parent_path = os.path.dirname(file_path)
+        filename = os.path.basename(file_path)
+        Task.objects.update_or_create(full_path=file_path, defaults={
+            "state": "success",
+            "parent_path": parent_path,
+            "filename": filename
+        })
+
+
+def save_lrc_file(f, each):
+    base_filename = ".".join(os.path.basename(f.filename).split(".")[:-1])
+
+    if each.get("lyrics", None):
+        f["lyrics"] = each["lyrics"]
+        lyrics_file_path = f"{os.path.dirname(each['file_full_path'])}/{base_filename}.lrc"
+        if not os.path.exists(lyrics_file_path):  # 如果不存在则写入歌词文件
+            with open(lyrics_file_path, "w", encoding="utf-8") as f_lyc:
+                f_lyc.write(each["lyrics"])
+
+
 def save_music(f, each, is_raw_thumbnail):
     from applications.task.services.music_ids import MusicIDS
 

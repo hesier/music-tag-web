@@ -17,8 +17,8 @@ from applications.task.serialziers import FileListSerializer, Id3Serializer, Upd
     TidyFolderSerializer, TaskSerializer, UploadImageSerializer
 from applications.task.services.music_ids import MusicIDS
 from applications.task.services.music_resource import MusicResource
-from applications.task.services.update_ids import update_music_info
-from applications.task.tasks import full_scan_folder, scan, clear_music, batch_auto_tag_task, tidy_folder_task
+from applications.task.services.update_ids import update_music_info, update_music_lrc_file
+from applications.task.tasks import full_scan_folder, scan, clear_music, batch_auto_tag_task, batch_auto_lrc_task, tidy_folder_task
 from applications.utils.translation import translation_lyc_text
 from component.drf.viewsets import GenericViewSet
 from django_vue_cli.celery_app import app as celery_app
@@ -31,13 +31,13 @@ class TaskViewSets(GenericViewSet):
             return FileListSerializer
         elif self.action == "music_id3":
             return Id3Serializer
-        elif self.action == "update_id3":
+        elif self.action in ["update_id3", "update_lrc"]:
             return UpdateId3Serializer
         elif self.action == "fetch_id3_by_title":
             return FetchId3ByTitleSerializer
         elif self.action == "fetch_lyric":
             return FetchLlyricSerializer
-        elif self.action in ["batch_update_id3", "batch_auto_update_id3"]:
+        elif self.action in ["batch_update_id3", "batch_auto_update_id3", "batch_auto_update_lrc"]:
             return BatchUpdateId3Serializer
         elif self.action == "translation_lyc":
             return TranslationLycSerializer
@@ -154,6 +154,14 @@ class TaskViewSets(GenericViewSet):
         return self.success_response()
 
     @action(methods=['POST'], detail=False)
+    def update_lrc(self, request, *args, **kwargs):
+        """更新音乐id3信息"""
+        validate_data = self.is_validated_data(request.data)
+        music_id3_info = validate_data['music_id3_info']
+        update_music_lrc_file(music_id3_info)
+        return self.success_response()
+
+    @action(methods=['POST'], detail=False)
     def batch_update_id3(self, request, *args, **kwargs):
         """批量更新音乐id3信息"""
         validate_data = self.is_validated_data(request.data)
@@ -206,6 +214,29 @@ class TaskViewSets(GenericViewSet):
             }))
         TaskRecord.objects.bulk_create(bulk_set, batch_size=500)
         batch_auto_tag_task(timestamp, source_list, select_mode)
+        return self.success_response()
+
+    @action(methods=['POST'], detail=False)
+    def batch_auto_update_lrc(self, request, *args, **kwargs):
+        validate_data = self.is_validated_data(request.data)
+        full_path = validate_data['file_full_path']
+        select_data = validate_data['select_data']
+        music_info = validate_data['music_info']
+        select_mode = music_info["select_mode"]
+        source_list = music_info.get("source_list", [])
+        timestamp = str(int(time.time() * 1000))
+        bulk_set = []
+        for each in select_data:
+            name = each.get("name")
+            song_name = ".".join(name.split(".")[:-1])
+            bulk_set.append(TaskRecord(**{
+                "song_name": song_name,
+                "full_path": f"{full_path}/{name}",
+                "icon": each.get("icon"),
+                "batch": timestamp
+            }))
+        TaskRecord.objects.bulk_create(bulk_set, batch_size=500)
+        batch_auto_lrc_task(timestamp, source_list, select_mode)
         return self.success_response()
 
     @action(methods=['POST'], detail=False)
