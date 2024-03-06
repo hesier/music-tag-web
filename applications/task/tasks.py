@@ -250,18 +250,13 @@ def batch_auto_tag_task(batch, source_list, select_mode):
     """
     folder_list = TaskRecord.objects.filter(batch=batch, icon="icon-folder").all()
     for folder in folder_list:
-        data = os.scandir(folder.full_path)
+        files_list = parse_folder(folder.full_path)
         bulk_set = []
-        for entry in data:
-            each = entry.name
-            file_type = each.split(".")[-1]
-            file_name = ".".join(each.split(".")[:-1])
-            if file_type not in ALLOW_TYPE:
-                continue
+        for file in files_list:
             bulk_set.append(TaskRecord(**{
                 "batch": batch,
-                "song_name": file_name,
-                "full_path": f"{folder.full_path}/{each}",
+                "song_name": file.get("name"),
+                "full_path": file.get("path"),
                 "icon": "icon-music",
 
             }))
@@ -309,18 +304,13 @@ def batch_auto_lrc_task(batch, source_list, select_mode):
     """
     folder_list = TaskRecord.objects.filter(batch=batch, icon="icon-folder").all()
     for folder in folder_list:
-        data = os.scandir(folder.full_path)
+        files_list = parse_folder(folder.full_path)
         bulk_set = []
-        for entry in data:
-            each = entry.name
-            file_type = each.split(".")[-1]
-            file_name = ".".join(each.split(".")[:-1])
-            if file_type not in ALLOW_TYPE:
-                continue
+        for file in files_list:
             bulk_set.append(TaskRecord(**{
                 "batch": batch,
-                "song_name": file_name,
-                "full_path": f"{folder.full_path}/{each}",
+                "song_name": file.get("name"),
+                "full_path": file.get("path"),
                 "icon": "icon-music",
 
             }))
@@ -359,6 +349,18 @@ def batch_auto_lrc_task(batch, source_list, select_mode):
                 "song_name": task.song_name,
                 "artist_name": task.artist_name,
             })
+
+
+def parse_folder(dir_path):
+    """获取文件夹与子文件夹内的所有音乐文件"""
+    files_list = []
+    for entry in os.scandir(dir_path):
+        if entry.is_dir():
+            files_list.extend(parse_folder(entry.path))
+        elif entry.is_file() and entry.name.split(".")[-1] in ALLOW_TYPE:
+            files_list.append({'name': entry.name, 'path': entry.path})
+
+    return files_list
 
 
 def tidy_folder_task(music_path_list, tidy_config):
